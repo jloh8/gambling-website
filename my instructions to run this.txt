@@ -1,0 +1,14 @@
+python and requirement txt hosted in GitHub website https://github.com/jloh8/gambling-website
+this is the public website https://gambling-website-wnwybkousy7bvahfec9uu2.streamlit.app/
+
+https://share.streamlit.io/deploy (this is what hooks up GitHub files to generate a public website)
+
+
+
+Bash command:
+
+ctrl + c ( stop local web activity in bash)
+
+streamlit run app.py (runs code in bash with a local website view)
+
+pip freeze > requirements.txt (updates libraries i use that streamlit use to recognize and run app properly in the WWW)
