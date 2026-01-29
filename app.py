@@ -201,3 +201,12 @@ with tab2:
                             st.info("⚖️ **Betting Signal:** Low sample size or average performance. Check injury report.")
             else:
                 st.error("Lineup table found, but player names column is missing. Contact support.")
+
+
+
+
+
+
+
+
+test
