@@ -12,3 +12,13 @@ ctrl + c ( stop local web activity in bash)
 streamlit run app.py (runs code in bash with a local website view)
 
 pip freeze > requirements.txt (updates libraries i use that streamlit use to recognize and run app properly in the WWW)
+
+
+
+git remote set-url origin https://github.com/jloh8/finance-website.git ( set the right GitHub URL)
+
+
+once GitHub and git is hooked up to be the same:
+git add .
+git commit -m "refractor...."
+git push origin main
