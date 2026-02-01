@@ -9,7 +9,7 @@ from nba_api.stats.static import teams
 from nba_api.stats.endpoints import commonteamroster
 
 # --- CONFIGURATION ---
-GEMINI_API_KEY = "AIzaSyDHhSaVMBVtRWIsbTF3AkrNJzuxjniKGn4"
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"] 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 st.set_page_config(page_title="Gemini NBA Scout", layout="wide", page_icon="🏀")
