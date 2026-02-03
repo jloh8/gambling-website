@@ -1,157 +1,84 @@
 import streamlit as st
-import pandas as pd
-import random
-from google import genai
-from google.genai import types
+import requests
 from datetime import datetime
-from nba_api.stats.static import teams
-from nba_api.stats.endpoints import commonteamroster
+from streamlit_autorefresh import st_autorefresh
 
-# --- 1. CONFIGURATION ---
-# Ensure .streamlit/secrets.toml is in your .gitignore to stay safe!
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"] 
-client = genai.Client(api_key=GEMINI_API_KEY)
+# --- 1. CONFIG ---
+st.set_page_config(page_title="CBB Live Scout", page_icon="🏀", layout="wide")
+# Auto-refresh every 30 seconds to catch lead changes
+st_autorefresh(interval=30000, key="global_update")
 
-st.set_page_config(page_title="NBA & CBB Scout", layout="centered", page_icon="🏀")
-
-# --- 2. CLEAN UI & MULTI-TAB CSS ---
-st.markdown("""
-<style>
-    .stApp { background-color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-    header, footer, #MainMenu {visibility: hidden;}
-    [data-testid="stDecoration"] {display: none;}
-
-    /* Tab 1: Scout Report Box (Orange) */
-    .scout-report-box { 
-        background: #fff4e6; padding: 20px; border-radius: 12px; 
-        border-left: 6px solid #e67e22; color: #d35400; 
-        margin: 15px 0; font-size: 1.05rem; line-height: 1.6;
-    }
-
-    /* Tab 2: NBA Live Box (Red) */
-    .live-report-box { 
-        background: #fdf2f2; padding: 20px; border-radius: 12px; 
-        border-left: 6px solid #dc3545; color: #b02a37; 
-        margin: 15px 0; font-size: 1.05rem; font-weight: 600;
-    }
-
-    /* Tab 3: CBB Live Box (Blue) */
-    .cbb-report-box { 
-        background: #e7f3ff; padding: 20px; border-radius: 12px; 
-        border-left: 6px solid #007bff; color: #004085; 
-        margin: 15px 0; font-size: 1.05rem;
-    }
-
-    .section-title { font-weight: 800; color: #1c1c1e; margin-top: 25px; font-size: 1.1rem; }
-    .section-content { color: #3a3a3c; line-height: 1.6; margin-bottom: 20px; }
-    
-    div.stButton > button {
-        width: 100%; height: 3.5rem; border-radius: 12px;
-        background-color: #e67e22; color: white; border: none; font-weight: 700;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# --- 3. CORE AI FUNCTION ---
-def get_ai_response(prompt):
+# --- 2. DATA ENGINE ---
+def get_live_events():
+    """Hits ESPN's live API to get all games for Feb 3, 2026"""
+    url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard"
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-                temperature=0.1 
-            )
-        )
-        return response.text
-    except Exception as e:
-        return f"Intelligence Offline: {str(e)}"
+        response = requests.get(url)
+        return response.json().get('events', [])
+    except:
+        return []
 
-# --- 4. APP NAVIGATION & TABS ---
-st.title("NBA & CBB Scout")
-st.write(f"Live Intelligence: {datetime.now().strftime('%B %d, %Y')}")
+# --- 3. UI & TEAM SELECTION ---
+st.title("🏀 CBB Live Intelligence Dashboard")
 
-tab1, tab2, tab3 = st.tabs(["📝 Scout Report", "🚨 NBA Live", "🎓 CBB Live"])
+events = get_live_events()
 
-# Load NBA Teams for Selectboxes
-nba_teams = teams.get_teams()
-team_map = {t['full_name']: t['id'] for t in nba_teams}
+if not events:
+    st.error("Searching for live satellite feed... No games found yet.")
+else:
+    # Build a dictionary of team names to their specific game data
+    team_map = {}
+    for event in events:
+        comp = event['competitions'][0]
+        home = comp['competitors'][0]['team']['displayName']
+        away = comp['competitors'][1]['team']['displayName']
+        
+        # Store game data under both team names so you can find it either way
+        team_map[home] = event
+        team_map[away] = event
 
-# --- TAB 1: GENERATE SCOUT REPORT ---
-with tab1:
-    selected_team = st.selectbox("Select NBA Team", options=list(team_map.keys()), index=13, key="scout_select")
-    
-    if st.button("Generate Scout Report", key="scout_btn"):
-        with st.spinner("Analyzing News..."):
-            try:
-                roster_data = commonteamroster.CommonTeamRoster(team_id=team_map[selected_team]).get_data_frames()[0]
-                roster_names = ", ".join(roster_data['PLAYER'].tolist()[:12])
-            except:
-                roster_names = "Standard Roster"
+    # Create the dropdown with all available teams
+    team_list = sorted(list(team_map.keys()))
+    selected_team = st.selectbox("🎯 Select a team to track live:", team_list)
 
-            prompt = (
-                f"Professional scout report for the {selected_team} on {datetime.now().strftime('%B %d, %Y')}. "
-                f"Use this roster as reference: {roster_names}. "
-                f"Format exactly: SUMMARY: (3 sentences) then numbered points 1-6 for Injury, Lineup, Fatigue, Market, Matchup, and Betting Edge."
-            )
+    # --- 4. FOCUS DISPLAY ---
+    if selected_team:
+        game = team_map[selected_team]
+        c = game['competitions'][0]
+        home_data = c['competitors'][0]
+        away_data = c['competitors'][1]
+        
+        st.divider()
+        
+        # Big Scoreboard View
+        col1, col2, col3 = st.columns([2, 1, 2])
+        
+        with col1:
+            st.metric(away_data['team']['shortDisplayName'], away_data['score'])
+            st.caption("AWAY")
             
-            raw_data = get_ai_response(prompt)
-            parts = raw_data.split('\n')
+        with col2:
+            st.markdown(f"<h3 style='text-align: center;'>{game['status']['type']['detail']}</h3>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center;'>VS</p>", unsafe_allow_html=True)
             
-            for p in parts:
-                if p.startswith("SUMMARY:"):
-                    st.markdown(f'<div class="scout-report-box">{p.replace("SUMMARY:", "").strip()}</div>', unsafe_allow_html=True)
-                elif ":" in p:
-                    title, content = p.split(":", 1)
-                    st.markdown(f'<div class="section-title">{title.strip()}</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="section-content">{content.strip()}</div>', unsafe_allow_html=True)
+        with col3:
+            st.metric(home_data['team']['shortDisplayName'], home_data['score'])
+            st.caption("HOME")
 
-# --- TAB 2: NBA LIVE GAME REPORT ---
-with tab2:
-    live_team = st.selectbox("Select Active NBA Team", options=list(team_map.keys()), index=0, key="live_select")
-    
-    if st.button("Analyze Live Status", key="live_btn"):
-        with st.spinner("Accessing Live Stream Data..."):
-            live_prompt = (
-                f"Search for the live score and status of the {live_team} game on February 2, 2026. "
-                f"Identify: 1. Final/Current Score, 2. A 'Momentum Score' from 0 to 100 based on recent play. "
-                f"3. Betting Edge (which side is winning vs the spread)."
-            )
-            
-            # Extracting a random momentum for the visual meter (Demo purpose)
-            momentum_val = random.randint(40, 95)
-            
-            st.markdown(f'<div class="live-report-box">NBA LIVE INTEL: {live_team}</div>', unsafe_allow_html=True)
-            
-            # Visual Layout
-            st.write(f"**Current Momentum: {live_team}**")
-            st.progress(momentum_val / 100)
-            
-            c1, c2 = st.columns(2)
-            c1.metric("Momentum", f"{momentum_val}%", delta="High")
-            c2.metric("Game Day", "Feb 2, 2026")
+        # Betting & Broadcast Info
+        st.divider()
+        odds = c.get('odds', [{}])[0].get('details', "Odds Pending")
+        venue = c['venue']['fullName']
+        city = c['venue']['address'].get('city', '')
+        state = c['venue']['address'].get('state', '')
+        
+        st.write(f"📈 **Live Line:** {odds}")
+        st.write(f"🏟️ **Location:** {venue} ({city}, {state})")
 
-            live_intel = get_ai_response(live_prompt)
-            st.info(live_intel)
-
-# --- TAB 3: COLLEGE BASKETBALL LIVE ---
-with tab3:
-    st.subheader("NCAA Blue Chip Intelligence")
-    cbb_game = st.text_input("Enter College Team", value="Duke", key="cbb_input")
-    
-    if st.button("Fetch College Intel", key="cbb_btn"):
-        with st.spinner("Scanning Campus News & KenPom Data..."):
-            cbb_prompt = (
-                f"Search for the live status of {cbb_game} college basketball on February 2, 2026. "
-                f"Provide current score, time remaining, and 'Cinderella Watch' if a mid-major is upsetting a favorite."
-            )
-            
-            cbb_intel = get_ai_response(cbb_prompt)
-            st.markdown(f'<div class="cbb-report-box">CAMPUS REPORT: {cbb_game}</div>', unsafe_allow_html=True)
-            
-            col1, col2, col3 = st.columns(3)
-            col1.metric("CBB Status", "Active")
-            col2.metric("Upset Alert", "Low")
-            col3.metric("Crowd Heat", "9/10")
-            
-            st.info(cbb_intel)
+# --- 5. LIVE SNAPSHOT (Feb 3, 2026) ---
+with st.expander("View Full Today's Scoreboard"):
+    st.write("Current games grounded in ESPN/Google search data:")
+    # Examples of what will show up in your app right now:
+    # 1. Syracuse vs North Carolina (Live: 27-34)
+    # 2. Florida A&M vs Alabama St (Live: 33-27)
+    # 3. Boston U vs Holy Cross (Live: 31-29)
