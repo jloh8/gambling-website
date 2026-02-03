@@ -50,6 +50,7 @@ def get_nba_scout_report(team_name, roster_summary):
         f"4. MARKET MOVEMENT: Trade rumors or betting line shifts. "
         f"5. KEY MATCHUP: Which player is the 'X-factor' for today. "
         f"6. BETTING EDGE: Final actionable betting recommendation."
+        f"7. MOMENTUM EDGE: Momentum edge recommendation."
     )
 
     try:
@@ -92,7 +93,7 @@ if st.button("Generate Scout Report"):
 
         for p in parts:
             if p.startswith("SUMMARY:"): summary = p.replace("SUMMARY:", "").strip()
-            elif any(p.startswith(f"{i}.") for i in range(1, 7)): points.append(p)
+            elif any(p.startswith(f"{i}.") for i in range(1, 8)): points.append(p)
 
         # 1. Display Narrative Summary (The Orange Box)
         st.markdown(f'<div class="scout-report-box">{summary}</div>', unsafe_allow_html=True)
