@@ -47,11 +47,11 @@ def get_nba_scout_report(team_name, roster_summary):
         f"3. FATIGUE FACTOR: Schedule analysis, other juicy news like lifestyle rumors or travel fatigue. "
         f"4. MARKET MOVEMENT: Trade rumors. "
         f"5. BETTING EDGE 1: what is at stake for this team? do a deep dive. "
-        f"6. BETTING EDGE 2: Team trends over last 20 days: ATS (Against the Spread) coverage, Over/Under totals, and win/loss percentages. "
+        f"6. BETTING EDGE 2: find me the biggest edge against their next oponent that is not obvious to regular fans. "
         f"7. BETTING EDGE 3: give me a solid argument of why this team will win today based on past trends. particularly against the next team they play. some trend ideas include how they are competing against other strong team if this is lower ranking team we are analyzing."
-        f"8. BETTING EDGE 4: Analysis of home vs away performance in the betting markets. "
+        f"8. BETTING EDGE 4: what is the most interesting bet on the lowest odd to win in the nba for today's game?  i would like to bet very little money to win alot of money. "
         f"9. BETTING EDGE 5: How have the team performedover their last 10 games, and how does their actual win/loss record compare to their record against the spread and the over/under? "
-        f"10. BETTING EDGE 6: Which players are the most consistent for over/under bets, and what are their key stats and 10 day trend?"
+        f"10. BETTING EDGE 6: find me the biggest edge on players against their next oponent that is not obvious to regular fans."
     )
 
     try:
