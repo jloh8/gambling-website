@@ -19,15 +19,13 @@ st.markdown("""
     header, footer, #MainMenu {visibility: hidden;}
     [data-testid="stDecoration"] {display: none;}
 
-    /* Top Narrative Box (Live Intel) */
     .scout-report-box { 
         background: #fff4e6; padding: 20px; border-radius: 12px; 
         border-left: 6px solid #e67e22; color: #d35400; 
         margin: 15px 0; font-size: 1.05rem; line-height: 1.6;
     }
 
-    /* Numbered Deep Dive Sections (Matching your Image) */
-    .section-title { font-weight: 800; color: #1c1c1e; margin-top: 25px; font-size: 1.1rem; }
+    .section-title { font-weight: 800; color: #1c1c1e; margin-top: 25px; font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 5px; }
     .section-content { color: #3a3a3c; line-height: 1.6; margin-bottom: 20px; }
     
     div.stButton > button:first-child {
@@ -44,13 +42,16 @@ def get_nba_scout_report(team_name, roster_summary):
         f"DO NOT use conversational filler like 'Okay' or 'Here is your report'. "
         f"Format the response exactly as follows: "
         f"SUMMARY: A 3-sentence narrative about the team's current situation. "
-        f"1. INJURY STATUS: Detailed update on absences and impact. "
+        f"1. INJURY STATUS: Detailed update on absences and impact, two sentence. "
         f"2. STARTING 5: Likely lineup based on today's news. "
-        f"3. FATIGUE FACTOR: Schedule analysis (back-to-backs/travel). "
-        f"4. MARKET MOVEMENT: Trade rumors or betting line shifts. "
-        f"5. KEY MATCHUP: Which player is the 'X-factor' for today. "
-        f"6. BETTING EDGE: Final actionable betting recommendation."
-        f"7. MOMENTUM EDGE: Momentum edge recommendation."
+        f"3. FATIGUE FACTOR: Schedule analysis, other juicy news like lifestyle rumors or travel fatigue. "
+        f"4. MARKET MOVEMENT: Trade rumors. "
+        f"5. BETTING EDGE 1: what is at stake for this team? do a deep dive. "
+        f"6. BETTING EDGE 2: Team trends over last 20 days: ATS (Against the Spread) coverage, Over/Under totals, and win/loss percentages. "
+        f"7. BETTING EDGE 3: give me a solid argument of why this team will win today based on past trends. particularly against the next team they play. some trend ideas include how they are competing against other strong team if this is lower ranking team we are analyzing."
+        f"8. BETTING EDGE 4: Analysis of home vs away performance in the betting markets. "
+        f"9. BETTING EDGE 5: How have the team performedover their last 10 games, and how does their actual win/loss record compare to their record against the spread and the over/under? "
+        f"10. BETTING EDGE 6: Which players are the most consistent for over/under bets, and what are their key stats and 10 day trend?"
     )
 
     try:
@@ -77,7 +78,7 @@ selected_team = st.selectbox("Select Team", options=list(team_map.keys()), index
 if st.button("Generate Scout Report"):
     team_id = team_map[selected_team]
     
-    with st.spinner("Analyzing News..."):
+    with st.spinner("Analyzing News & Vegas Markets..."):
         try:
             roster_data = commonteamroster.CommonTeamRoster(team_id=team_id).get_data_frames()[0]
             roster_names = ", ".join(roster_data['PLAYER'].tolist()[:12])
@@ -86,23 +87,35 @@ if st.button("Generate Scout Report"):
 
         raw_data = get_nba_scout_report(selected_team, roster_names)
         
-        # Parsing the Summary and the 6 numbered points
         parts = raw_data.split('\n')
         summary = ""
         points = []
 
         for p in parts:
-            if p.startswith("SUMMARY:"): summary = p.replace("SUMMARY:", "").strip()
-            elif any(p.startswith(f"{i}.") for i in range(1, 8)): points.append(p)
+            p = p.strip()
+            if not p: continue
+            if p.startswith("SUMMARY:"): 
+                summary = p.replace("SUMMARY:", "").strip()
+            # Updated to range(1, 11) to capture all 10 points
+            elif any(p.startswith(f"{i}.") for i in range(1, 11)): 
+                points.append(p)
 
-        # 1. Display Narrative Summary (The Orange Box)
-        st.markdown(f'<div class="scout-report-box">{summary}</div>', unsafe_allow_html=True)
+        # 1. Display Narrative Summary
+        if summary:
+            st.markdown(f'<div class="scout-report-box">{summary}</div>', unsafe_allow_html=True)
 
-        # 2. Display the 6 Numbered Sections (Matching the Image style)
+        # 2. Display the 10 Sections
         for point in points:
-            title, content = point.split(":", 1) if ":" in point else (point, "")
-            st.markdown(f'<div class="section-title">{title.strip()}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="section-content">{content.strip()}</div>', unsafe_allow_html=True)
+            # Flexible split to handle different AI formatting
+            if ":" in point:
+                title, content = point.split(":", 1)
+                st.markdown(f'<div class="section-title">{title.strip()}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="section-content">{content.strip()}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="section-content"><b>{point}</b></div>', unsafe_allow_html=True)
 
         with st.expander("📋 View Official Roster"):
-            st.dataframe(roster_data[['PLAYER', 'POSITION', 'HEIGHT']], use_container_width=True)
+            try:
+                st.dataframe(roster_data[['PLAYER', 'POSITION', 'HEIGHT']], use_container_width=True)
+            except:
+                st.write("Roster data unavailable for this team.")
