@@ -60,7 +60,7 @@ def get_scout_report_prompt(team_name, date, roster_names):
     4. MARKET MOVEMENT: Trade rumors or internal friction.
     5. BETTING EDGE 1: Deep dive into team stakes.
     6. BETTING EDGE 2: The 'hidden' edge against next opponent.
-    7. BETTING EDGE 3: Argument for a win based on past trends.
+    7. BETTING EDGE 3: give me some betting suggestions for this team against their oponent ex: feb 5th 2026 senguin's been heating up scoring higher than average, i then put a bet for him to score 15+ points which is pretty safe.
     8. BETTING EDGE 4: Most interesting low-odds value bet.
     9. BETTING EDGE 5: Last 10 games performance vs Spread and O/U.
     10. BETTING EDGE 6: Biggest player-specific matchup advantage.
