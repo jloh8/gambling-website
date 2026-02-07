@@ -1,184 +1,113 @@
 import streamlit as st
-import json
-import re
-from google import genai
-from google.genai import types
-from datetime import datetime
+import pandas as pd
+import numpy as np
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import commonteamroster
+from google import genai
 
-# --- 1. IMPORT PROMPT LIBRARY ---
-from prompts import get_variance_prompt, get_scout_report_prompt
-
-# --- 2. CONFIGURATION ---
+# --- 1. CONFIG & CLIENT ---
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"] 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-st.set_page_config(
-    page_title="NBA Pulse", 
-    layout="wide", 
-    page_icon="🏀",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="NBA Pulse", layout="wide", page_icon="🏀")
 
-# --- 3. MOBILE-FIRST GLOBAL STYLING ---
+# --- 2. CUSTOM CSS FOR MATCHUP CARDS ---
 st.markdown("""
 <style>
-    /* Main container adjustments */
-    .stApp { background-color: #FFFFFF; }
+    .stApp { background-color: #FFFFFF; color: #1c1c1e; }
     
-    /* Responsive Scout Box */
-    .scout-report-box { 
-        background: #fff4e6; padding: 15px; border-radius: 8px; 
-        border-left: 5px solid #e67e22; color: #d35400; 
-        margin: 10px 0; font-size: 0.95rem; line-height: 1.4;
+    /* Section Headers */
+    .section-header {
+        font-size: 0.75rem; font-weight: 700; color: #8e8e93;
+        text-transform: uppercase; letter-spacing: 0.8px; margin: 20px 0 10px 0;
     }
-    
-    .section-title { font-weight: 800; color: #1c1c1e; margin-top: 18px; font-size: 1rem; border-bottom: 1px solid #eee; }
-    .section-content { color: #3a3a3c; font-size: 0.9rem; line-height: 1.5; margin-bottom: 15px; }
 
-    /* Touch-friendly Buttons */
+    /* Kalshi-Style Card Container */
+    .market-card {
+        border: 1px solid #f2f2f7; border-radius: 16px;
+        padding: 20px; margin-bottom: 15px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+    }
+
+    /* Team Row Layout */
+    .team-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 8px 0;
+    }
+    .team-info { display: flex; align-items: center; gap: 12px; }
+    .team-name { font-weight: 700; font-size: 1rem; color: #1c1c1e; }
+    
+    /* Probability & Price Styling */
+    .prob-text { color: #8e8e93; font-size: 0.85rem; font-weight: 500; }
+    
+    /* Button Overrides */
     div.stButton > button {
-        width: 100% !important; 
-        height: auto !important;
-        padding: 10px 5px !important;
-        background-color: #ffffff !important;
-        text-align: center !important;
-        font-size: 12px !important;
-        margin-bottom: 8px !important;
-        border-radius: 8px !important;
-        white-space: normal !important; /* Allows text to wrap on small screens */
+        border-radius: 8px !important; border: 1px solid #e5e5ea !important;
+        background: #f2f2f7 !important; color: #1c1c1e !important;
+        font-weight: 700 !important; width: 100% !important; padding: 10px !important;
     }
-
-    /* Big Generate Button */
-    .generate-btn button {
-        height: 4rem !important; 
-        background-color: #e67e22 !important;
-        color: white !important; 
-        font-weight: 700 !important;
-        font-size: 1.1rem !important;
-    }
-
-    /* Reduce vertical whitespace for mobile */
-    .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+    div.stButton > button:hover { background: #e8f5e9 !important; border-color: #c8e6c9 !important; color: #2e7d32 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. ENGINES ---
+# --- 3. MOCK MATCHUP DATA ---
+# In a live app, you'd use leaguegamefinder for daily matchups
+matchups = [
+    {"home": "Oklahoma City", "away": "Denver", "prob": "40%", "price_yes": "40¢", "price_no": "61¢"},
+    {"home": "Cleveland", "away": "New York", "prob": "23%", "price_yes": "23¢", "price_no": "78¢"},
+    {"home": "Charlotte", "away": "Atlanta", "prob": "56%", "price_yes": "56¢", "price_no": "45¢"}
+]
 
-@st.cache_data(ttl=1800)
-def get_scoring_variance_data():
-    today = datetime.now().strftime('%B %d, %Y')
-    context = "2026 Season context: Cooper Flagg (Mavs), Jaden Ivey (Bulls), Sengun (Rockets)."
-    prompt = get_variance_prompt(today, context)
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-                temperature=0.0
-            )
-        )
-        match = re.search(r'\[.*\]', response.text, re.DOTALL)
-        return json.loads(match.group(0)) if match else None
-    except:
-        return None
+# --- 4. MAIN UI ---
 
-def get_nba_scout_report(team_name, roster_summary):
-    today = datetime.now().strftime('%B %d, %Y')
-    prompt = get_scout_report_prompt(team_name, today, roster_summary)
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash", 
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-                temperature=0.1 
-            )
-        )
-        return response.text
-    except:
-        return "Intelligence Offline"
+col_left, col_right = st.columns([1.8, 1.2])
 
-# --- 5. UI LOGIC ---
-
-if "sel_player" not in st.session_state:
-    st.session_state.sel_player = None
-
-# Spotlight View (Optimized for Mobile overlay)
-if st.session_state.sel_player:
-    s = st.session_state.sel_player
-    st.subheader(f"🎯 Spotlight: {s['p']}")
-    v_color = "green" if s['s'] == "UP" else "red"
-    st.markdown(f"**Variance:** <span style='color:{v_color}; font-weight:bold;'>{s['v']}</span>", unsafe_allow_html=True)
-    st.info(s['desc'])
-    if st.button("← Back to Dashboard"):
-        st.session_state.sel_player = None
-        st.rerun()
-    st.divider()
-
-st.title("🏀 NBA Pulse")
-st.caption(f"Intelligence Update: {datetime.now().strftime('%b %d')}")
-
-# --- PULSE GRID (2 columns on mobile, 4 on desktop) ---
-trends = get_scoring_variance_data()
-if trends:
-    st.write("⚡ **Hot & Cold Variance**")
-    # On mobile, we use 2 columns to keep buttons large enough to tap
-    cols = st.columns(2) 
-    for i, item in enumerate(trends):
-        col_idx = i % 2 # Force 2nd column wrap
-        with cols[col_idx]:
-            is_up = item['s'] == "UP"
-            btn_color = "#2ecc71" if is_up else "#e74c3c"
-            prefix = "▲" if is_up else "▼"
+with col_left:
+    st.markdown('<div class="section-header">Live Markets</div>', unsafe_allow_html=True)
+    
+    for i, m in enumerate(matchups):
+        with st.container():
+            st.markdown(f'<div class="market-card">', unsafe_allow_html=True)
             
-            st.markdown(f"""
-                <style>
-                div[class*="st-key-pulse_{i}"] button {{
-                    color: {btn_color} !important;
-                    border: 1.5px solid {btn_color} !important;
-                }}
-                </style>
-            """, unsafe_allow_html=True)
+            # Matchup Header
+            st.markdown(f"**Championship: {m['away']} vs {m['home']}**")
             
-            # Label with Player [Team] and Variance
-            label = f"{prefix} {item['p']}\n{item['v']}"
-            if st.button(label, key=f"pulse_{i}"):
-                st.session_state.sel_player = item
-                st.rerun()
+            # Away Team Row
+            r1_left, r1_mid, r1_btn1, r1_btn2 = st.columns([2, 1, 1, 1])
+            with r1_left: st.markdown(f"🏀 **{m['away']}**")
+            with r1_mid: st.markdown(f"<span class='prob-text'>{m['prob']}</span>", unsafe_allow_html=True)
+            with r1_btn1: 
+                if st.button(f"Yes {m['price_yes']}", key=f"y_{i}"):
+                    st.session_state.selected_team = m['away']
+            with r1_btn2: st.button(f"No {m['price_no']}", key=f"n_{i}")
 
-st.divider()
+            # Home Team Row
+            r2_left, r2_mid, r2_btn1, r2_btn2 = st.columns([2, 1, 1, 1])
+            with r2_left: st.markdown(f"🏀 **{m['home']}**")
+            with r2_mid: st.markdown(f"<span class='prob-text'>{(100-int(m['prob'].strip('%')))}%</span>", unsafe_allow_html=True)
+            with r2_btn1: 
+                if st.button(f"Yes 50¢", key=f"y_h_{i}"):
+                    st.session_state.selected_team = m['home']
+            with r2_btn2: st.button(f"No 50¢", key=f"n_h_{i}")
+            
+            st.markdown('</div>', unsafe_allow_html=True)
 
-# --- SCOUT REPORT SECTION ---
-st.subheader("📋 Team Scout")
-all_teams = teams.get_teams()
-team_map = {t['full_name']: t['id'] for t in all_teams}
-selected_team = st.selectbox("Pick a Team", options=list(team_map.keys()), index=0)
-
-st.markdown('<div class="generate-btn">', unsafe_allow_html=True)
-if st.button("Get Intelligence"):
-    team_id = team_map[selected_team]
-    with st.spinner("Intercepting..."):
-        try:
-            roster_df = commonteamroster.CommonTeamRoster(team_id=team_id).get_data_frames()[0]
-            roster_summary = ", ".join(roster_df['PLAYER'].tolist()[:10])
-        except:
-            roster_summary = "Roster loading error."
-
-        report = get_nba_scout_report(selected_team, roster_summary)
+with col_right:
+    st.markdown('<div class="section-header">Intelligence Report</div>', unsafe_allow_html=True)
+    
+    if "selected_team" in st.session_state:
+        st.markdown(f'<div class="market-card" style="background:#f9f9fb;">', unsafe_allow_html=True)
+        st.markdown(f"### Scouting: {st.session_state.selected_team}")
         
-        # Mobile Parsing Render
-        lines = report.split('\n')
-        for line in lines:
-            line = line.strip()
-            if not line: continue
+        with st.spinner(f"Analyzing {st.session_state.selected_team} strategy..."):
+            # Fetch real roster for the selected team
+            all_teams = teams.get_teams()
+            team_id = next(t['id'] for t in all_teams if st.session_state.selected_team in t['full_name'])
+            roster = commonteamroster.CommonTeamRoster(team_id=team_id).get_data_frames()[0]
+            names = ", ".join(roster['PLAYER'].head(5).tolist())
             
-            if line.startswith("SUMMARY:"): 
-                st.markdown(f'<div class="scout-report-box">{line.replace("SUMMARY:", "").strip()}</div>', unsafe_allow_html=True)
-            elif ":" in line:
-                title, content = line.split(":", 1)
-                st.markdown(f"**{title.strip()}**")
-                st.markdown(f"<div class='section-content'>{content.strip()}</div>", unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown(f"**Key Rotation:** {names}")
+            st.info("Gemini Analysis: Expect high variance in perimeter defense for this matchup.")
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div style="text-align:center; padding: 40px; color:#8e8e93;">Select a "Yes" contract to see team intel</div>', unsafe_allow_html=True)
